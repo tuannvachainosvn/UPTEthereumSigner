@@ -7,9 +7,9 @@
 //
 
 #import <XCTest/XCTest.h>
-
+@import CoreEth;
 #import "EthereumSigner.h"
-#import "EthCore/BTCData.h"
+//#import "EthCore/BTCData.h"
 
 
 @interface EthereumSignerTest : XCTestCase

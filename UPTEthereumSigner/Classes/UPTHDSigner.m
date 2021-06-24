@@ -6,12 +6,14 @@
 //  Copyright © 2018 ConsenSys AG. All rights reserved.
 //
 
+@import CoreEth;
+@import Valet;
 #import "UPTHDSigner.h"
 #import "EthereumSigner.h"
-#import "EthCore/BTCMnemonic.h"
+//#import "EthCore/BTCMnemonic.h"
 #import "keccak.h"
-#import "EthCore/CoreBitcoin+Categories.h"
-#import <Valet/Valet.h>
+//#import "EthCore/CoreBitcoin+Categories.h"
+//#import <Valet/Valet.h>
 
 // https://github.com/ethereum/EIPs/issues/84
 NSString * const UPORT_ROOT_DERIVATION_PATH = @"m/7696500'/0'/0'/0'";
@@ -38,7 +40,13 @@ NSString * const UPTHDSignerErrorCodeLevelSigningError = @"-14";
 
 + (BOOL)hasSeed {
     VALValet *addressKeystore = [UPTHDSigner ethAddressesKeystore];
-    NSArray *addressKeys = [[addressKeystore allKeys] allObjects];
+    NSError* error;
+    NSSet<NSString *>* keys = [addressKeystore allKeysAndReturnError:&error];
+    if (error != nil) {
+        NSLog(@"%@", [error localizedDescription]);
+        return false;
+    }
+    NSArray *addressKeys = [keys allObjects];
     BOOL hasSeed = NO;
     for ( NSString *addressKey in addressKeys ) {
         if ( [addressKey containsString:@"seed"] ) {
@@ -50,8 +58,14 @@ NSString * const UPTHDSignerErrorCodeLevelSigningError = @"-14";
 }
 
 + (NSArray *)listSeedAddresses {
-  VALValet *addressKeystore = [UPTHDSigner ethAddressesKeystore];
-  return [[addressKeystore allKeys] allObjects];
+    VALValet *addressKeystore = [UPTHDSigner ethAddressesKeystore];
+    NSError* error;
+    NSSet<NSString *>* keys = [addressKeystore allKeysAndReturnError:&error];
+    if (error != nil) {
+        NSLog(@"%@", [error localizedDescription]);
+        return [[NSArray alloc] init];
+    }
+    return [keys allObjects];
 }
 
 + (void)showSeed:(NSString *)rootAddress prompt:(NSString *)prompt callback:(UPTHDSignerSeedPhraseResult)callback {
@@ -76,19 +90,27 @@ NSString * const UPTHDSignerErrorCodeLevelSigningError = @"-14";
 
 + (void)deleteSeed:(NSString *)rootEthereumAddress callback:(UPTEthSignerDeleteSeedResult)callback {
     UPTHDSignerProtectionLevel protectionLevel = [UPTHDSigner protectionLevelWithEthAddress:rootEthereumAddress];
+    NSError* error;
     if ( protectionLevel != UPTHDSignerProtectionLevelNotRecognized ) {
         VALValet *privateKeystore = [UPTHDSigner privateKeystoreWithProtectionLevel:protectionLevel];
         NSString *privateKeyLookupKeyName = [UPTHDSigner entropyLookupKeyNameWithEthAddress:rootEthereumAddress];
-        [privateKeystore removeObjectForKey:privateKeyLookupKeyName];
+        [privateKeystore removeObjectForKey:privateKeyLookupKeyName error:&error];
+        if (error != nil) {
+            NSLog(@"%@", [error localizedDescription]);
+        }
     }
     
     VALValet *protectionLevelsKeystore = [UPTHDSigner keystoreForProtectionLevels];
     NSString *protectionLevelLookupKey = [UPTHDSigner protectionLevelLookupKeyNameWithEthAddress:rootEthereumAddress];
-    [protectionLevelsKeystore removeObjectForKey:protectionLevelLookupKey];
-    
+    [protectionLevelsKeystore removeObjectForKey:protectionLevelLookupKey error:&error];
+    if (error != nil) {
+        NSLog(@"%@", [error localizedDescription]);
+    }
     VALValet *addressKeystore = [UPTHDSigner ethAddressesKeystore];
-    [addressKeystore removeObjectForKey:rootEthereumAddress];
-    
+    [addressKeystore removeObjectForKey:rootEthereumAddress error:&error];
+    if (error != nil) {
+        NSLog(@"%@", [error localizedDescription]);
+    }
     callback( YES, nil );
 }
 
@@ -157,7 +179,11 @@ NSString * const UPTHDSignerErrorCodeLevelSigningError = @"-14";
 
     VALValet *privateKeystore = [UPTHDSigner privateKeystoreWithProtectionLevel:protectionLevel];
     NSString *privateKeyLookupKeyName = [UPTHDSigner entropyLookupKeyNameWithEthAddress:rootEthereumAddress];
-    [privateKeystore setObject:mnemonic.entropy forKey:privateKeyLookupKeyName];
+    NSError* error;
+    [privateKeystore setObject:mnemonic.entropy forKey:privateKeyLookupKeyName error:&error];
+    if (error != nil) {
+        NSLog(@"%@", [error localizedDescription]);
+    }
     [UPTHDSigner saveProtectionLevel:protectionLevel withEthAddress:rootEthereumAddress];
     [UPTHDSigner saveEthAddress:rootEthereumAddress];
 
@@ -303,7 +329,11 @@ NSString * const UPTHDSignerErrorCodeLevelSigningError = @"-14";
 + (UPTHDSignerProtectionLevel)protectionLevelWithEthAddress:(NSString *)ethAddress {
     NSString *protectionLevelLookupKeyName = [UPTHDSigner protectionLevelLookupKeyNameWithEthAddress:ethAddress];
     VALValet *protectionLevelsKeystore = [UPTHDSigner keystoreForProtectionLevels];
-    NSString *keychainSourcedProtectionLevel = [protectionLevelsKeystore stringForKey:protectionLevelLookupKeyName];
+    NSError* error;
+    NSString *keychainSourcedProtectionLevel = [protectionLevelsKeystore stringForKey:protectionLevelLookupKeyName error:&error];
+    if (error != nil) {
+        NSLog(@"%@", [error localizedDescription]);
+    }
     if (!keychainSourcedProtectionLevel ) {
         return UPTHDSignerProtectionLevelNotRecognized;
     }
@@ -321,19 +351,19 @@ NSString * const UPTHDSignerErrorCodeLevelSigningError = @"-14";
     VALValet *keystore;
     switch ( protectionLevel ) {
         case UPTHDSignerProtectionLevelNormal: {
-            keystore = [[VALValet alloc] initWithIdentifier:UPTHDPrivateKeyIdentifier accessibility:VALAccessibilityWhenUnlockedThisDeviceOnly];
+            keystore = [VALValet valetWithIdentifier:UPTHDPrivateKeyIdentifier accessibility:VALAccessibilityWhenUnlockedThisDeviceOnly];
             break;
         }
         case UPTHDSignerProtectionLevelICloud: {
-            keystore = [[VALSynchronizableValet alloc] initWithIdentifier:UPTHDPrivateKeyIdentifier accessibility:VALAccessibilityWhenUnlocked];
+            keystore = [VALValet valetWithIdentifier:UPTHDPrivateKeyIdentifier accessibility:VALAccessibilityWhenUnlocked];
             break;
         }
         case UPTHDSignerProtectionLevelPromptSecureEnclave: {
-            keystore = [[VALSecureEnclaveValet alloc] initWithIdentifier:UPTHDPrivateKeyIdentifier accessControl:VALAccessControlUserPresence];
+            keystore = (VALValet*)[VALSecureEnclaveValet valetWithIdentifier:UPTHDPrivateKeyIdentifier accessControl:VALSecureEnclaveAccessControlUserPresence];
             break;
         }
         case UPTHDSignerProtectionLevelSinglePromptSecureEnclave: {
-            keystore = [[VALSinglePromptSecureEnclaveValet alloc] initWithIdentifier:UPTHDPrivateKeyIdentifier accessControl:VALAccessControlUserPresence];
+            keystore = (VALValet*)[VALSinglePromptSecureEnclaveValet valetWithIdentifier:UPTHDPrivateKeyIdentifier accessControl:VALSecureEnclaveAccessControlUserPresence];
             break;
         }
         case UPTHDSignerProtectionLevelNotRecognized: {
@@ -354,11 +384,15 @@ NSString * const UPTHDSignerErrorCodeLevelSigningError = @"-14";
     VALValet *protectionLevelsKeystore = [UPTHDSigner keystoreForProtectionLevels];
     NSString *protectionLevelLookupKey = [UPTHDSigner protectionLevelLookupKeyNameWithEthAddress:ethAddress];
     NSString *keystoreCompatibleProtectionLevel = [UPTHDSigner keychainCompatibleProtectionLevel:protectionLevel];
-    [protectionLevelsKeystore setString:keystoreCompatibleProtectionLevel forKey:protectionLevelLookupKey];
+    NSError* error;
+    [protectionLevelsKeystore setString:keystoreCompatibleProtectionLevel forKey:protectionLevelLookupKey error:&error];
+    if (error != nil) {
+        NSLog(@"%@", [error localizedDescription]);
+    }
 }
 
 + (VALValet *)keystoreForProtectionLevels {
-    return [[VALValet alloc] initWithIdentifier:UPTHDProtectionLevelIdentifier accessibility:VALAccessibilityAlways];
+    return [VALValet valetWithIdentifier:UPTHDProtectionLevelIdentifier accessibility:VALAccessibilityWhenPasscodeSetThisDeviceOnly];
 }
 
 + (NSString *)entropyLookupKeyNameWithEthAddress:(NSString *)ethAddress {
@@ -370,7 +404,7 @@ NSString * const UPTHDSignerErrorCodeLevelSigningError = @"-14";
 }
 
 + (VALValet *)ethAddressesKeystore {
-    return [[VALValet alloc] initWithIdentifier:UPTHDAddressIdentifier accessibility:VALAccessibilityAlways];
+    return [VALValet valetWithIdentifier:UPTHDAddressIdentifier accessibility:VALAccessibilityWhenPasscodeSetThisDeviceOnly];
 }
 
 /// @return NSString a derived version of UPTEthKeychainProtectionLevel appropriate for keychain storage
@@ -380,7 +414,12 @@ NSString * const UPTHDSignerErrorCodeLevelSigningError = @"-14";
 
 + (void)saveEthAddress:(NSString *)ethAddress {
     VALValet *addressKeystore = [UPTHDSigner ethAddressesKeystore];
-    [addressKeystore setString:ethAddress forKey:ethAddress];
+    NSError* error;
+    [addressKeystore setString:ethAddress forKey:ethAddress error:&error];
+    if (error != nil) {
+        NSLog(@"%@", [error localizedDescription]);
+    }
+//    [addressKeystore setString:ethAddress forKey:ethAddress];
 }
 
 /// @param userPromptText the string to display to the user when requesting access to the secure enclave
@@ -389,21 +428,24 @@ NSString * const UPTHDSignerErrorCodeLevelSigningError = @"-14";
     VALValet *entropyKeystore = [self privateKeystoreWithProtectionLevel:protectionLevel];
     NSString *entropyLookupKeyName = [UPTHDSigner entropyLookupKeyNameWithEthAddress:ethAddress];
     NSData *entropy;
+    NSError *error;
     switch ( protectionLevel ) {
         case UPTHDSignerProtectionLevelNormal: {
-            entropy = [entropyKeystore objectForKey:entropyLookupKeyName];
+            entropy = [entropyKeystore objectForKey:entropyLookupKeyName error:&error];
             break;
         }
         case UPTHDSignerProtectionLevelICloud: {
-            entropy = [entropyKeystore objectForKey:entropyLookupKeyName];
+            entropy = [entropyKeystore objectForKey:entropyLookupKeyName error:&error];
             break;
         }
         case UPTHDSignerProtectionLevelPromptSecureEnclave: {
-            entropy = [(VALSecureEnclaveValet *)entropyKeystore objectForKey:entropyLookupKeyName userPrompt:userPromptText userCancelled:nil];
+            entropy = [(VALSecureEnclaveValet *)entropyKeystore objectForKey:entropyLookupKeyName withPrompt:userPromptText error:&error];
+//            entropy = [(VALSecureEnclaveValet *)entropyKeystore objectForKey:entropyLookupKeyName userPrompt:userPromptText userCancelled:nil];
             break;
         }
         case UPTHDSignerProtectionLevelSinglePromptSecureEnclave: {
-            entropy = [(VALSinglePromptSecureEnclaveValet *)entropyKeystore objectForKey:entropyLookupKeyName userPrompt:userPromptText userCancelled:nil];
+            entropy = [(VALSinglePromptSecureEnclaveValet *)entropyKeystore objectForKey:entropyLookupKeyName withPrompt:userPromptText error:&error];
+//            entropy = [(VALSinglePromptSecureEnclaveValet *)entropyKeystore objectForKey:entropyLookupKeyName userPrompt:userPromptText userCancelled:nil];
             break;
         }
         case UPTHDSignerProtectionLevelNotRecognized: {
@@ -415,7 +457,9 @@ NSString * const UPTHDSignerErrorCodeLevelSigningError = @"-14";
             break;
         }
     }
-
+    if (error != nil) {
+        NSLog(@"%@", [error localizedDescription]);
+    }
     return entropy;
 }
 

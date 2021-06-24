@@ -19,11 +19,12 @@
 //  You should have received a copy of the GNU General Public License
 //  along with UPTEthereumSigner.  If not, see <http://www.gnu.org/licenses/>.
 //
+@import CoreEth;
 
 #import "EthereumSigner.h"
 
-#import "EthCore/CoreBitcoin+Categories.h"
-#import "EthCore/BTCKey.h"
+//#import "EthCore/CoreBitcoin+Categories.h"
+//#import "EthCore/BTCKey.h"
 #include <openssl/bn.h>
 #include <openssl/ec.h>
 #include <openssl/obj_mac.h>

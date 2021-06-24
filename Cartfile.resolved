@@ -1,0 +1,4 @@
+github "Square/Valet" "4.1.2"
+github "specta/specta" "v1.0.7"
+github "uport-project/openssl" "v1.0.1e"
+github "uport-project/uport-ios-core-eth" "v1.0.0"
